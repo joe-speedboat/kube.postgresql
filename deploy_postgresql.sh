@@ -30,30 +30,27 @@ generate_password() {
   tr -dc A-Za-z0-9 </dev/urandom | head -c 16
 }
 
-# Prompt the user for PostgreSQL credentials, with the option to auto-generate passwords.
-while [ -z "$root_pass" ]; do
-  read -p "Enter PostgreSQL root password (press Enter to generate one): " root_pass
-  if [ -z "$root_pass" ]; then
-    root_pass=$(generate_password)
-    echo "Generated root password: $root_pass"
+while [ -z "$db_user" ]; do
+  read -p "Enter PostgreSQL app user: " db_user
+done
+
+while [ -z "$db_name" ]; do
+  read -p "Enter PostgreSQL database name: " db_name
+done
+
+while [ -z "$db_pass" ]; do
+  read -p "Enter PostgreSQL db password (press Enter to generate one): " db_pass
+  if [ -z "$db_pass" ]; then
+    db_pass=$(generate_password)
+    echo "Generated app password: $db_pass"
   fi
 done
 
-while [ -z "$app_user" ]; do
-  read -p "Enter PostgreSQL app user: " app_user
-done
-
-while [ -z "$app_db" ]; do
-  read -p "Enter PostgreSQL app database: " app_db
-done
-
-while [ -z "$app_pass" ]; do
-  read -p "Enter PostgreSQL app password (press Enter to generate one): " app_pass
-  if [ -z "$app_pass" ]; then
-    app_pass=$(generate_password)
-    echo "Generated app password: $app_pass"
-  fi
-done
+# Prompt the user for the Application version
+read -p "Enter PostgreSQL version (default: 18): " pg_vers
+if [ -z "$pg_vers" ]; then
+  pg_vers="18"
+fi
 
 # Prompt the user for the Persistent Volume Claim (PVC) size, defaulting to '5Gi' if not specified.
 read -p "Enter PVC size for PostgreSQL (default is '5Gi'): " pvc_size
@@ -62,23 +59,21 @@ if [ -z "$pvc_size" ]; then
 fi
 
 # Encode the provided secrets in base64 format for Kubernetes secret creation.
-root_pass_b64=$(echo -n "$root_pass" | base64 | tr -d '\n' | tr -d '\r')
-app_user_b64=$(echo -n "$app_user" | base64 | tr -d '\n' | tr -d '\r')
-app_db_b64=$(echo -n "$app_db" | base64 | tr -d '\n' | tr -d '\r')
-app_pass_b64=$(echo -n "$app_pass" | base64 | tr -d '\n' | tr -d '\r')
+db_user_b64=$(echo -n "$db_user" | base64 | tr -d '\n' | tr -d '\r')
+db_name_b64=$(echo -n "$db_name" | base64 | tr -d '\n' | tr -d '\r')
+db_pass_b64=$(echo -n "$db_pass" | base64 | tr -d '\n' | tr -d '\r')
 
 
 # Export the encoded secrets as environment variables for use in template substitution.
-export ROOT_PASS_B64="$root_pass_b64"
-export APP_USER_B64="$app_user_b64"
-export APP_DB_B64="$app_db_b64"
-export APP_PASS_B64="$app_pass_b64"
+export DB_USER_B64="$db_user_b64"
+export DB_NAME_B64="$db_name_b64"
+export DB_PASS_B64="$db_pass_b64"
 export PVC_SIZE="$pvc_size"
 
 # Apply the Kubernetes configurations using the substituted templates.
 envsubst < k8s/secret.yaml.template | sed 's/mariadb/postgresql/g' | kubectl apply -f -
 envsubst < k8s/persistent-volume-claim.yaml.template | kubectl apply -f -
-sed 's/mariadb/postgresql/g' k8s/deployment.yaml | kubectl apply -f -
+sed "s/__PG_VERSION__/$pg_vers/g" k8s/deployment.yaml | kubectl apply -f -
 kubectl apply -f k8s/service.yaml
 
 # Verify the deployment by listing the pods and services in the current namespace.

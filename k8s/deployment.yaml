@@ -14,28 +14,23 @@ spec:
     spec:
       containers:
       - name: postgresql
-        image: postgres:latest
+        image: postgres:__PG_VERSION__
         env:
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               name: postgresql-secret
-              key: root_pass
+              key: db_pass
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
               name: postgresql-secret
-              key: app_db
+              key: db_name
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
               name: postgresql-secret
-              key: app_user
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: postgresql-secret
-              key: app_db
+              key: db_user
         ports:
         - containerPort: 5432
         volumeMounts:
